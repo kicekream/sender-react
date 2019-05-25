@@ -1,14 +1,26 @@
 import React, { Component } from "react";
+import _ from "lodash";
+import MoviesTable from "./moviesTable";
 import { getMovies } from "../services/fakeMovieService";
-import Like from "./common/like";
+import { getGenres } from "../services/fakeGenreService";
+import ListGroup from "./common/listGroup";
 import Pagination from "./common/pagination";
+import { paginate } from "../utils/pagination";
 //import Delete from "./common/delete"
 
 class Movies extends Component {
   state = {
-    movies: getMovies(),
-    pageSize: 4
+    movies: [],
+    genres: [],
+    pageSize: 4,
+    currentPage: 1,
+    sortColumn: { path: "title", order: "asc" }
   };
+
+  componentDidMount() {
+    const genres = [{ _id: "", name: "All Genres" }, ...getGenres()];
+    this.setState({ movies: getMovies(), genres: genres });
+  }
 
   handleDelete = movie => {
     const movies = this.state.movies.filter(m => m._id !== movie._id);
@@ -24,61 +36,78 @@ class Movies extends Component {
   };
 
   handlePageChange = page => {
-    console.log(page);
+    this.setState({ currentPage: page });
+  };
+
+  handleGenreSelect = genre => {
+    this.setState({ selectedGenre: genre, currentPage: 1 });
+  };
+
+  handleSort = sortColumn => {
+    this.setState({ sortColumn });
+  };
+
+  getPageData = () => {
+    
+    const { pageSize, currentPage, movies: allMovies } = this.state;
+    const { selectedGenre } = this.state;
+    const { sortColumn } = this.state;
+
+    const filtered =
+    selectedGenre && selectedGenre._id
+      ? allMovies.filter(m => m.genre._id === selectedGenre._id)
+      : allMovies;
+
+  const sorted = _.orderBy(filtered, [sortColumn.path], [sortColumn.order]);
+
+  const movies = paginate(sorted, currentPage, pageSize);
+
+  return {totalCount: filtered.length, data: movies};
   }
 
   render() {
     const { length: count } = this.state.movies;
+    const { pageSize, currentPage } = this.state;
+    const { genres, selectedGenre } = this.state;
+    const { sortColumn } = this.state;
+
     if (count === 0) return <p>No movie in Database</p>;
 
-    return (
-      <React.Fragment>
-        <p>Movie(s) in Database: {count}</p>
-        <table className="table">
-          <thead className="thead-dark">
-            <tr>
-              <th>Title</th>
-              <th>Genre</th>
-              <th>Stock</th>
-              <th>Rating</th>
-              <th />
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {this.state.movies.map(movie => (
-              <tr key={movie._id}>
-                <td>{movie.title}</td>
-                <td>{movie.genre.name}</td>
-                <td>{movie.numberInStock}</td>
-                <td>{movie.dailyRentalRate}</td>
-                <td>
-                  <Like
-                    liked={movie.liked}
-                    onClick={() => this.handleLike(movie)}
-                  />
-                </td>
-                <td>
-                  <button
-                    onClick={() => this.handleDelete(movie)}
-                    className="btn btn-outline-danger btn-sm"
-                  >
-                    Delete
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+    const {totalCount, data: movies} = this.getPageData();
 
-        <Pagination
-          itemsCount={count}
-          pageSize={this.state.pageSize}
-          onPageChange={this.handlePageChange}
-        />
-      </React.Fragment>
+    return (
+      <div className="row">
+        <div className="col-3">
+          <ListGroup
+            genres={genres}
+            selectedGenre={selectedGenre}
+            onGenreSelect={this.handleGenreSelect}
+          />
+        </div>
+        <div className="col">
+          <p>Movie(s) in this Category: {totalCount}</p>
+          <MoviesTable
+            //calling the states to the components for using
+            movies={movies}
+            sortColumn={sortColumn}
+            onLike={this.handleLike}
+            onDelete={this.handleDelete}
+            onSort={this.handleSort}
+          />
+          <Pagination
+            itemsCount={totalCount}
+            onPageChange={this.handlePageChange}
+            pageSize={pageSize}
+            currentPage={currentPage}
+          />
+        </div>
+      </div>
     );
   }
 }
 
+ListGroup.defaultProps = {
+  textProperty: "name",
+  valueProperty: "_id"
+};
 export default Movies;
